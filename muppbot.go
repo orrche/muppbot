@@ -35,23 +35,21 @@ func gettemp() string {
 func main() {
 
 	channelPtr := flag.String("channel", "", "Channel name")
-	nickPtr := flag.String("nick", "", "Nickname")
-	serverPtr := flag.String("server", "", "IRC Server, host:port")
+	nick := flag.String("nick", "", "Nickname")
+	server := flag.String("server", "", "IRC Server, host:port")
 
 	flag.Parse()
 
 	channel := "#" + *channelPtr
-	nick := *nickPtr
-	server := *serverPtr
 
-	conn, err := net.Dial("tcp", server)
+	conn, err := net.Dial("tcp", *server)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	fmt.Fprintln(conn, "USER", nick, "", nick, "", nick, ":", nick)
-	fmt.Fprintln(conn, "NICK", nick)
+	fmt.Fprintln(conn, "USER", *nick, "", *nick, "", *nick, ":", *nick)
+	fmt.Fprintln(conn, "NICK", *nick)
 	fmt.Fprintln(conn, "JOIN", channel)
 
 	reader := bufio.NewReader(conn)
