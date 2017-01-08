@@ -8,9 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"runtime"
 	"strings"
-	"sync"
 )
 
 func gettemp() string {
@@ -32,68 +30,52 @@ func gettemp() string {
 	return v.Temp
 
 }
-func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "Det är ", gettemp(), " grader ute.")
-}
 
 func main() {
 
-	runtime.GOMAXPROCS(1)
+	channel := "#muppardev"
+	nick := "mupparbotdev"
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+	conn, err := net.Dial("tcp", "irc.freenode.org:6667")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	go func() {
-		channel := "#muppardev"
-		nick := "mupparbotdev"
+	fmt.Fprintln(conn, "USER", nick, "", nick, "", nick, ":", nick)
+	fmt.Fprintln(conn, "NICK", nick)
+	fmt.Fprintln(conn, "JOIN", channel)
 
-		conn, err := net.Dial("tcp", "irc.freenode.org:6667")
-		if err != nil {
-			fmt.Println(err)
-			return
+	reader := bufio.NewReader(conn)
+
+	for {
+
+		line, _ := reader.ReadString('\n')
+		data := strings.Split(line, ":")
+
+		cmd := strings.TrimSpace(data[0])
+		val := ""
+		arg := ""
+
+		if len(data) > 1 {
+
+			val = strings.TrimSpace(data[1])
+
+		}
+		if len(data) > 2 {
+			arg = strings.TrimSpace(data[2])
+		}
+		log.Print(cmd, val, arg)
+		if cmd == "PING" {
+			fmt.Fprintln(conn, "PONG", val)
 		}
 
-		fmt.Fprintln(conn, "USER", nick, "", nick, "", nick, ":", nick)
-		fmt.Fprintln(conn, "NICK", nick)
-		fmt.Fprintln(conn, "JOIN", channel)
-
-		reader := bufio.NewReader(conn)
-
-		for {
-
-			line, _ := reader.ReadString('\n')
-			data := strings.Split(line, ":")
-
-			cmd := strings.TrimSpace(data[0])
-			val := ""
-			arg := ""
-
-			if len(data) > 1 {
-
-				val = strings.TrimSpace(data[1])
-
-			}
-			if len(data) > 2 {
-				arg = strings.TrimSpace(data[2])
-			}
-			log.Print(cmd, val, arg)
-			if cmd == "PING" {
-				fmt.Fprintln(conn, "PONG", val)
-			}
-
-			if arg == "!mupp" {
-				fmt.Fprintln(conn, "PRIVMSG", channel, ":Muppelimupp!")
-			}
-
-			if arg == "!mupp temp" {
-				fmt.Fprintln(conn, "PRIVMSG", channel, ":I Jönköping (på flygplatsen är det", gettemp(), "grader.")
-			}
+		if arg == "!mupp" {
+			fmt.Fprintln(conn, "PRIVMSG", channel, ":Muppelimupp!")
 		}
-	}()
 
-	go func() {
-		http.HandleFunc("/", handler)
-		http.ListenAndServe(":8080", nil)
-	}()
-	wg.Wait()
+		if arg == "!mupp temp" {
+			fmt.Fprintln(conn, "PRIVMSG", channel, ":I Jönköping (på flygplatsen) är det", gettemp(), "grader.")
+		}
+	}
 }
