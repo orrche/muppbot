@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/xml"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -33,10 +34,17 @@ func gettemp() string {
 
 func main() {
 
-	channel := "#muppardev"
-	nick := "mupparbotdev"
+	channelPtr := flag.String("channel", "", "Channel name")
+	nickPtr := flag.String("nick", "", "Nickname")
+	serverPtr := flag.String("server", "", "IRC Server, host:port")
 
-	conn, err := net.Dial("tcp", "irc.freenode.org:6667")
+	flag.Parse()
+
+	channel := "#" + *channelPtr
+	nick := *nickPtr
+	server := *serverPtr
+
+	conn, err := net.Dial("tcp", server)
 	if err != nil {
 		fmt.Println(err)
 		return
