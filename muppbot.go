@@ -5,11 +5,15 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
+
+	"github.com/gliderlabs/ssh"
 )
 
 type IrcChannelMsg struct {
@@ -53,6 +57,26 @@ func gettemp() string {
 
 }
 
+func sshserver(ircc chan Ircmessage) {
+	ssh.Handle(func(s ssh.Session) {
+		log.Print(s.Command())
+		reader := bufio.NewReader(s)
+
+		io.WriteString(s, "\000")
+		scpLine, _ := reader.ReadString('\n')
+		scpData := strings.Split(scpLine, " ")
+		filename := scpData[2]
+		size, _ := strconv.ParseInt(scpData[1], 10, 64)
+
+		log.Printf("Filename: %s (%d) ", filename, size)
+
+		ircc <- IrcChannelMsg{"#muppardev", "Someone is pushing file " + filename + " (" + string(size)}
+		io.WriteString(s, "\000")
+		log.Print(reader.ReadString('\n'))
+	})
+	log.Fatal(ssh.ListenAndServe(":2222", nil, ssh.HostKeyFile("ssh/gogs.rsa")))
+}
+
 func ircsender(conn io.Writer, c chan Ircmessage) {
 	for {
 		conn.Write((<-c).getMessage())
@@ -62,6 +86,8 @@ func ircsender(conn io.Writer, c chan Ircmessage) {
 
 func main() {
 	c := make(chan Ircmessage)
+
+	go sshserver(c)
 
 	channelPtr := flag.String("channel", "", "Channel name")
 	nick := flag.String("nick", "", "Nickname")
