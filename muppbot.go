@@ -91,6 +91,7 @@ func main() {
 
 	channelPtr := flag.String("channel", "", "Channel name")
 	nick := flag.String("nick", "", "Nickname")
+	pass := flag.String("pass", "", "Password")
 	server := flag.String("server", "", "IRC Server, host:port")
 
 	flag.Parse()
@@ -103,6 +104,9 @@ func main() {
 		return
 	}
 
+	if len(*pass) > 0 {
+		fmt.Fprintln(conn, "PASS", *pass)
+	}
 	fmt.Fprintln(conn, "USER", *nick, "", *nick, "", *nick, ":", *nick)
 	fmt.Fprintln(conn, "NICK", *nick)
 	fmt.Fprintln(conn, "JOIN", channel)
