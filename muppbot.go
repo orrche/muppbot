@@ -12,6 +12,27 @@ import (
 	"strings"
 )
 
+type IrcChannelMsg struct {
+	channel string
+	message string
+}
+
+func (msg IrcChannelMsg) getMessage() []byte {
+	return []byte("PRIVMSG " + msg.channel + " :" + msg.message)
+}
+
+type Ircmsg struct {
+	message string
+}
+
+func (msg Ircmsg) getMessage() []byte {
+	return []byte(msg.message)
+}
+
+type Ircmessage interface {
+	getMessage() []byte
+}
+
 func gettemp() string {
 
 	type Weather struct {
@@ -32,7 +53,15 @@ func gettemp() string {
 
 }
 
+func ircsender(conn io.Writer, c chan Ircmessage) {
+	for {
+		conn.Write((<-c).getMessage())
+		conn.Write([]byte("\r\n"))
+	}
+}
+
 func main() {
+	c := make(chan Ircmessage)
 
 	channelPtr := flag.String("channel", "", "Channel name")
 	nick := flag.String("nick", "", "Nickname")
@@ -53,7 +82,7 @@ func main() {
 	fmt.Fprintln(conn, "JOIN", channel)
 
 	reader := bufio.NewReader(conn)
-
+	go ircsender(conn, c)
 	for {
 
 		line, _ := reader.ReadString('\n')
@@ -73,15 +102,15 @@ func main() {
 		}
 		log.Print(cmd, val, arg)
 		if cmd == "PING" {
-			fmt.Fprintln(conn, "PONG", val)
+			c <- Ircmsg{"PONG " + val}
 		}
 
 		if arg == "!mupp" {
-			fmt.Fprintln(conn, "PRIVMSG", channel, ":Muppelimupp!")
+			c <- IrcChannelMsg{channel, "Muppelimupp!"}
 		}
 
 		if arg == "!mupp temp" {
-			fmt.Fprintln(conn, "PRIVMSG", channel, ":I Jönköping (på flygplatsen) är det", gettemp(), "grader.")
+			c <- IrcChannelMsg{channel, "I Jönköping (på flygplatsen) är det " + gettemp() + " grader."}
 		}
 	}
 }
