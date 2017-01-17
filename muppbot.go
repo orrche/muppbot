@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/xml"
 	"flag"
 	"fmt"
@@ -10,8 +11,12 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gliderlabs/ssh"
 )
@@ -27,6 +32,11 @@ func (msg IrcChannelMsg) getMessage() []byte {
 
 type Ircmsg struct {
 	message string
+}
+
+type User struct {
+	key  []byte
+	user string
 }
 
 func (msg Ircmsg) getMessage() []byte {
@@ -57,24 +67,126 @@ func gettemp() string {
 
 }
 
-func sshserver(ircc chan Ircmessage) {
+var users []User
+
+func findUser(key []byte) User {
+	for _, user := range users {
+		if bytes.Equal(key, user.key) {
+			return user
+		}
+	}
+	return User{}
+}
+
+func paniconerr(err error, msg string) {
+	if err != nil {
+		log.Panic(msg, err)
+	}
+}
+
+func purgeFiles() {
+	for {
+		folders, _ := ioutil.ReadDir("ssh-data")
+		for _, folder := range folders {
+			fPath := path.Join("ssh-data", folder.Name())
+
+			files, _ := ioutil.ReadDir(fPath)
+			for _, file := range files {
+				filePath := path.Join(fPath, file.Name())
+
+				var st syscall.Stat_t
+				if err := syscall.Stat(filePath, &st); err != nil {
+					log.Fatal(err)
+				}
+				age := time.Now().Unix() - st.Mtim.Sec
+				log.Printf("file %s age: %d\n", filePath, age)
+
+				if age > 60 {
+					os.RemoveAll(fPath)
+				}
+
+			}
+		}
+		time.Sleep(time.Minute)
+	}
+}
+
+func sshserver(ircc chan Ircmessage, weburl string) {
+	go purgeFiles()
+	users = make([]User, 10, 10)
+
+	files, _ := ioutil.ReadDir("keys")
+	for _, f := range files {
+		if f.IsDir() {
+			keyFiles, _ := ioutil.ReadDir(path.Join("keys", f.Name()))
+			for _, keyFile := range keyFiles {
+				data, err := ioutil.ReadFile(path.Join("keys", f.Name(), keyFile.Name()))
+				paniconerr(err, "Problem reading file")
+				key, _, _, _, err := ssh.ParseAuthorizedKey(data)
+				paniconerr(err, "Problem parsing keyfile")
+
+				users = append(users, User{key.Marshal(), f.Name()})
+			}
+		}
+	}
+
 	ssh.Handle(func(s ssh.Session) {
-		log.Print(s.Command())
+		user := findUser(s.PublicKey().Marshal())
+
 		reader := bufio.NewReader(s)
 
-		io.WriteString(s, "\000")
-		scpLine, _ := reader.ReadString('\n')
-		scpData := strings.Split(scpLine, " ")
-		filename := scpData[2]
-		size, _ := strconv.ParseInt(scpData[1], 10, 64)
+		if s.Command()[0] == "scp" {
+			io.WriteString(s, "\000")
+			scpLine, _ := reader.ReadString('\n')
+			scpData := strings.Split(scpLine, " ")
+			filename := strings.TrimSpace(scpData[2])
+			size64, err := strconv.ParseInt(scpData[1], 10, 64)
+			size := int(size64)
 
-		log.Printf("Filename: %s (%d) ", filename, size)
+			tempdir, err := ioutil.TempDir("ssh-data", user.user)
 
-		ircc <- IrcChannelMsg{"#muppardev", "Someone is pushing file " + filename + " (" + string(size)}
-		io.WriteString(s, "\000")
-		log.Print(reader.ReadString('\n'))
+			if err == nil {
+				msg := fmt.Sprintf("%s is pushing filename: %s (%d)", user.user, filename, size)
+				log.Print(msg)
+				url := fmt.Sprintf(weburl + strings.SplitN(tempdir, "/", 2)[1] + "/" + filename)
+				log.Print(url)
+				// ircc <- IrcChannelMsg{"#" + s.Command()[2], msg}
+
+				io.WriteString(s, "\000")
+			} else {
+				io.WriteString(s, "\001")
+			}
+			f, err := os.Create(tempdir + "/" + filename)
+			defer f.Close()
+
+			for i := 0; i < size; {
+				toread := 1024
+				if (size - i) < toread {
+					toread = size - i
+				}
+				data := make([]byte, toread, toread)
+				length, err := io.ReadAtLeast(reader, data, toread)
+				i += length
+
+				if err != nil {
+					io.WriteString(s, "\001")
+					log.Panic(err)
+				}
+
+				f.Write(data[:length])
+			}
+			io.WriteString(s, "\000")
+		} else {
+			log.Print(s.Command()[0])
+		}
 	})
-	log.Fatal(ssh.ListenAndServe(":2222", nil, ssh.HostKeyFile("ssh/gogs.rsa")))
+
+	log.Fatal(ssh.ListenAndServe(":2222", nil,
+		ssh.HostKeyFile("ssh/gogs.rsa"),
+		ssh.PublicKeyAuth(func(user string, key ssh.PublicKey) bool {
+			return findUser(key.Marshal()).user != ""
+		}),
+	))
 }
 
 func ircsender(conn io.Writer, c chan Ircmessage) {
@@ -87,13 +199,18 @@ func ircsender(conn io.Writer, c chan Ircmessage) {
 func main() {
 	c := make(chan Ircmessage)
 
-	go sshserver(c)
+	fs := http.FileServer(http.Dir("ssh-data"))
+	http.Handle("/", fs)
+
+	go func() { http.ListenAndServe(":8008", nil) }()
 
 	channelPtr := flag.String("channel", "", "Channel name")
 	nick := flag.String("nick", "", "Nickname")
 	pass := flag.String("pass", "", "Password")
 	server := flag.String("server", "", "IRC Server, host:port")
+	weburl := flag.String("url", "", "WebUrl, http://localhost:8000")
 
+	go sshserver(c, *weburl)
 	flag.Parse()
 
 	channel := "#" + *channelPtr
