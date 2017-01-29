@@ -146,9 +146,9 @@ func sshserver(ircc chan Ircmessage, weburl string) {
 			tempdir, err := ioutil.TempDir("ssh-data", user.user)
 
 			if err == nil {
-				msg := fmt.Sprintf("%s is pushing filename: %s (%d)", user.user, filename, size)
-				log.Print(msg)
 				url := fmt.Sprintf(weburl + strings.SplitN(tempdir, "/", 2)[1] + "/" + filename)
+				msg := fmt.Sprintf("%s is pushing filename: %s (%d)", user.user, url, size)
+				log.Print(msg)
 				log.Print(url)
 				ircc <- IrcChannelMsg{"#" + s.Command()[2], msg}
 
