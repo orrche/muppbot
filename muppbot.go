@@ -112,7 +112,6 @@ func purgeFiles() {
 }
 
 func sshserver(ircc chan Ircmessage, weburl string) {
-	log.Print("WebURL: ", weburl)
 	go purgeFiles()
 	users = make([]User, 10, 10)
 
@@ -147,7 +146,7 @@ func sshserver(ircc chan Ircmessage, weburl string) {
 			tempdir, err := ioutil.TempDir("ssh-data", user.user)
 
 			if err == nil {
-				url := fmt.Sprintf(weburl + strings.SplitN(tempdir, "/", 2)[1] + "/" + filename)
+				url := fmt.Sprint(weburl + "/" + strings.SplitN(tempdir, "/", 2)[1] + "/" + filename)
 				msg := fmt.Sprintf("%s is pushing filename: %s (%d)", user.user, url, size)
 				log.Print(msg)
 				log.Print(url)
