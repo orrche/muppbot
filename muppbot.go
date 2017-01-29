@@ -112,6 +112,7 @@ func purgeFiles() {
 }
 
 func sshserver(ircc chan Ircmessage, weburl string) {
+	log.Print("WebURL: ", weburl)
 	go purgeFiles()
 	users = make([]User, 10, 10)
 
