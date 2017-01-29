@@ -150,7 +150,7 @@ func sshserver(ircc chan Ircmessage, weburl string) {
 				log.Print(msg)
 				url := fmt.Sprintf(weburl + strings.SplitN(tempdir, "/", 2)[1] + "/" + filename)
 				log.Print(url)
-				// ircc <- IrcChannelMsg{"#" + s.Command()[2], msg}
+				ircc <- IrcChannelMsg{"#" + s.Command()[2], msg}
 
 				io.WriteString(s, "\000")
 			} else {
