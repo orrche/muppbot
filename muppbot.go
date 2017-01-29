@@ -211,8 +211,8 @@ func main() {
 	server := flag.String("server", "", "IRC Server, host:port")
 	weburl := flag.String("url", "", "WebUrl, http://localhost:8000")
 
-	go sshserver(c, *weburl)
 	flag.Parse()
+	go sshserver(c, *weburl)
 
 	channel := "#" + *channelPtr
 
