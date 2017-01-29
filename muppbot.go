@@ -202,7 +202,7 @@ func main() {
 	fs := http.FileServer(http.Dir("ssh-data"))
 	http.Handle("/", fs)
 
-	go func() { http.ListenAndServe(":8008", nil) }()
+	go func() { http.ListenAndServe(":8080", nil) }()
 
 	channelPtr := flag.String("channel", "", "Channel name")
 	nick := flag.String("nick", "", "Nickname")
